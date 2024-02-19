@@ -1,48 +1,94 @@
 import styled from '@emotion/styled';
-import React, { useState } from 'react';
+import { useRouter } from 'next/router';
+import React, { ChangeEvent, useCallback, useEffect, useState } from 'react';
 
-const Button = styled.button`
-  color: turquoise;
-`;
+import CsvListItem from '@/components/CsvListItem';
+import Layout from '@/Layout';
+import { getCsvFiles, uploadCsvFile } from '@/service';
+import { Csv } from '@/type';
 
-const Header = styled.h1`
-  color: red;
-`;
+import type { NextPageWithLayout } from '@/pages/_app';
 
-const Container = styled.div`
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-`;
-const CsvEditorPage = () => {
-  const [getApiRes, setGetApiRes] = useState<string>('');
-  const [postApiRes, setPostApiRes] = useState<string>('');
-  const callGetApi = () => {
-    fetch('http://localhost:8080/v1/api/test')
-      .then((response) => response.json())
-      .then((data) => {
-        setGetApiRes(data.value);
-      });
-  };
+const CsvManagePage: NextPageWithLayout = () => {
+  const router = useRouter();
+  const [csvList, setCsvList] = useState<Csv[]>([]);
+  const [offset, setOffset] = useState(0);
+  const [limit, setLimit] = useState(10);
 
-  const callPostApi = () => {
-    fetch('http://localhost:8080/v1/api/add', { method: 'POST' })
-      .then((response) => response.text())
-      .then((data) => {
-        setPostApiRes(data);
-      });
-  };
+  const fetchCsvList = useCallback(async (_limit: number, _offset: number): Promise<void> => {
+    try {
+      const csvList = await getCsvFiles({ limit: _limit, offset: _offset });
+      setCsvList(csvList.content);
+      setOffset(csvList.pageable.offset);
+      setLimit(csvList.pageable.pageSize);
+    } catch (e) {
+      alert('Something went wrong during fetching CSV list');
+    }
+  }, []);
+
+  const uploadCsv = useCallback(async (e: ChangeEvent<HTMLInputElement>): Promise<void> => {
+    try {
+      if (!e.target.files) {
+        alert('Something went wrong during uploading CSV file');
+        return;
+      }
+
+      const csv = await uploadCsvFile({ file: e.target.files[0] });
+
+      setCsvList((prevState) => [...prevState, csv]);
+    } catch (e) {
+      alert('Something went wrong during uploading CSV file');
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchCsvList(limit, offset);
+  }, [fetchCsvList, limit, offset]);
+
   return (
     <Container>
-      <Header>CSV Editor</Header>
-      <Button onClick={callGetApi}>List</Button>
-      <div>API Res: {getApiRes}</div>
-
-      <Button onClick={callPostApi}>Upload</Button>
-      <div>API Res: {postApiRes}</div>
-      {/* Content can be added here */}
+      {csvList.length > 0 ? (
+        <Header>Click the edit button to edit a CSV</Header>
+      ) : (
+        <Header>Start by uploading a file</Header>
+      )}
+      <Filename>Filename</Filename>
+      <CsvList>
+        {csvList.map((csv) => (
+          <CsvListItem key={csv.id} csv={csv} onClick={() => router.push(`/edit/${csv.id}`)} />
+        ))}
+      </CsvList>
+      <input id={'upload_csv'} name={'csv'} type={'file'} accept={'.csv'} onChange={uploadCsv} />
     </Container>
   );
 };
 
-export default CsvEditorPage;
+const Container = styled.div`
+  border: 1px solid grey;
+  margin-top: 24px;
+  padding: 24px;
+`;
+
+const Header = styled.div`
+  margin-top: 12px;
+  margin-bottom: 12px;
+`;
+
+const Filename = styled.div`
+  flex: 1;
+  margin-top: 4px;
+  margin-bottom: 4px;
+  overflow: hidden;
+`;
+
+const CsvList = styled.div`
+  height: calc(100vh - 250px);
+  overflow: scroll;
+  margin-bottom: 12px;
+`;
+
+CsvManagePage.getLayout = function (page: React.ReactElement) {
+  return <Layout header={'Manage CSV'}>{page}</Layout>;
+};
+
+export default CsvManagePage;
