@@ -1,6 +1,8 @@
 import styled from '@emotion/styled';
+import { uniqBy } from 'lodash';
 import { useRouter } from 'next/router';
-import React, { ChangeEvent, useCallback, useEffect, useState } from 'react';
+import React, { ChangeEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { Waypoint } from 'react-waypoint';
 
 import CsvListItem from '@/components/CsvListItem';
 import Layout from '@/Layout';
@@ -14,13 +16,26 @@ const CsvManagePage: NextPageWithLayout = () => {
   const [csvList, setCsvList] = useState<Csv[]>([]);
   const [offset, setOffset] = useState(0);
   const [limit, setLimit] = useState(10);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasMore, setHasMore] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const fetchCsvList = useCallback(async (_limit: number, _offset: number): Promise<void> => {
     try {
+      setIsLoading(true);
       const csvList = await getCsvFiles({ limit: _limit, offset: _offset });
-      setCsvList(csvList.content);
-      setOffset(csvList.pageable.offset);
-      setLimit(csvList.pageable.pageSize);
+
+      if (csvList.first) {
+        setCsvList(csvList.content);
+      } else {
+        // remove duplicated items after calling uploadCsv()
+        setCsvList((prevState) => uniqBy(prevState.concat(csvList.content), 'id'));
+      }
+
+      setOffset(_offset);
+      setLimit(_limit);
+      setHasMore(!csvList.last);
+      setIsLoading(false);
     } catch (e) {
       alert('Something went wrong during fetching CSV list');
     }
@@ -36,6 +51,12 @@ const CsvManagePage: NextPageWithLayout = () => {
       const csv = await uploadCsvFile({ file: e.target.files[0] });
 
       setCsvList((prevState) => [...prevState, csv]);
+
+      alert(`uploaded ${e.target.files[0].name}`);
+
+      if (inputRef.current) {
+        inputRef.current.value = '';
+      }
     } catch (e) {
       alert('Something went wrong during uploading CSV file');
     }
@@ -57,8 +78,9 @@ const CsvManagePage: NextPageWithLayout = () => {
         {csvList.map((csv) => (
           <CsvListItem key={csv.id} csv={csv} onClick={() => router.push(`/edit/${csv.id}`)} />
         ))}
+        {!isLoading && hasMore && <Waypoint onEnter={() => setOffset((prevState) => prevState + 1)} />}
       </CsvList>
-      <input id={'upload_csv'} name={'csv'} type={'file'} accept={'.csv'} onChange={uploadCsv} />
+      <input ref={inputRef} id={'upload_csv'} name={'csv'} type={'file'} accept={'.csv'} onChange={uploadCsv} />
     </Container>
   );
 };

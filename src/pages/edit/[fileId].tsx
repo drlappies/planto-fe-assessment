@@ -51,7 +51,6 @@ const CsvEditPage: NextPageWithLayout = () => {
 
   const updateCsvRows = useCallback(async () => {
     try {
-      console.log(updatedRows.current.forEach((value) => console.log(value)));
       const rows: CsvRow[] = [];
       updatedRows.current.forEach((value) => {
         rows.push(value);
